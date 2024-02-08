@@ -1,0 +1,151 @@
+#!/bin/sh
+DIR=$(dirname "$0")
+FULLDIR=$(realpath "$DIR")
+cd "$FULLDIR"
+cd ..
+. ./.env
+
+if [ ! -d "deps" ]; then
+    run/setup
+fi
+
+mkdir dist
+mkdir -p ovl/etc
+touch ovl/etc/.default_boot_services
+mkdir -p ovl/etc/runlevels/default
+ln -sf /etc/init.d/local ovl/etc/runlevels/default
+mkdir -p ovl/etc/local.d
+
+mkdir -p ovl/etc/apk/
+cat > ovl/etc/apk/repositories << EOF; $(echo)
+/media/cdrom/apks
+EOF
+
+cat > ovl/etc/motd << EOF; $(echo)
+Welcome to Alpine Tweaked!
+EOF
+
+if [ ! "$SETUP" = "fastest" ]; then
+cat > ovl/etc/local.d/autosetup.start << ORF; $(echo)
+#! /bin/sh
+
+set -o errexit
+set -o nounset
+
+sleep 4
+
+rm -f /etc/local.d/autosetup.start
+rm -f /etc/runlevels/default/local
+
+ERASE_DISKS="$DISK" setup-alpine -ef /etc/autosetup/answers
+
+apk update
+apk upgrade
+
+apk add gcc musl-dev
+
+gcc -o autologin /etc/autosetup/autologin.c
+rm -rf /etc/autosetup
+mv autologin /usr/sbin/
+
+sed -i 's@:respawn:/sbin/getty@:respawn:/sbin/getty -n -l /usr/sbin/autologin@g' /etc/inittab 
+
+apk del gcc musl-dev
+
+sed -i -e 's/relatime/noatime/' /etc/fstab
+
+kill -HUP 1
+ORF
+fi
+
+if [ "$SETUP" = "fastest" ]; then
+cat > ovl/etc/local.d/autosetup.start << ORF; $(echo)
+#! /bin/sh
+
+set -o errexit
+set -o nounset
+
+rm -f /etc/local.d/autosetup.start
+rm -f /etc/runlevels/default/local
+
+ERASE_DISKS="$DISK" setup-alpine -ef /etc/autosetup/answers
+
+apk add gcc musl-dev
+
+gcc -o autologin /etc/autosetup/autologin.c
+rm -rf /etc/autosetup
+mv autologin /usr/sbin/
+
+sed -i 's@:respawn:/sbin/getty@:respawn:/sbin/getty -n -l /usr/sbin/autologin@g' /etc/inittab 
+
+sed -i -e 's/relatime/noatime/' /etc/fstab
+
+kill -HUP 1
+ORF
+fi
+
+chmod 755 ovl/etc/local.d/autosetup.start
+
+mkdir -p ovl/etc/autosetup
+if [ "$SETUP" = "full" ]; then
+cat > ovl/etc/autosetup/answers << EOF; $(echo)
+KEYMAPOPTS="us us"
+HOSTNAMEOPTS="$HOSTNAME"
+DEVDOPTS=mdev
+INTERFACESOPTS="auto lo
+iface lo inet loopback
+
+auto eth0
+iface eth0 inet dhcp
+"
+DNSOPTS="-d example.com 8.8.8.8"
+TIMEZONEOPTS="America/Detroit"
+PROXYOPTS=none
+APKREPOSOPTS="-f -c"
+USEROPTS=none
+SSHDOPTS=dropbear
+NTPOPTS=chrony
+DISKOPTS="-m data $DISK"
+LBUOPTS=none
+APKCACHEOPTS="/var/cache/apk"
+EOF
+fi
+
+# fast and fastest
+if [ ! "$SETUP" = "full" ]; then
+cat > ovl/etc/autosetup/answers << EOF; $(echo)
+KEYMAPOPTS="us us"
+HOSTNAMEOPTS="$HOSTNAME"
+DEVDOPTS=mdevd
+INTERFACESOPTS="auto lo
+iface lo inet loopback
+
+auto eth0
+iface eth0 inet dhcp
+"
+DNSOPTS="-d example.com 1.1.1.1"
+TIMEZONEOPTS="-z UTC"
+PROXYOPTS=none
+APKREPOSOPTS="-1"
+USEROPTS=none
+SSHDOPTS=none
+NTPOPTS=none
+DISKOPTS="-m data $DISK"
+LBUOPTS=none
+APKCACHEOPTS="/var/cache/apk"
+EOF
+fi
+
+cat > ovl/etc/autosetup/autologin.c << EOF; $(echo)
+#include <unistd.h>
+
+int main() 
+{
+    execlp("login", "login", "-f", "root", (char*)0);
+}
+EOF
+
+tar --owner=0 --group=0 -czf "dist/$HOSTNAME".apkovl.tar.gz -C ovl .
+rm -rf ovl
+xorriso -indev "$ISOPATH" -outdev "$CUSTPATH" -map "dist/$HOSTNAME.apkovl.tar.gz" "/$HOSTNAME.apkovl.tar.gz" -boot_image any replay
+rm -rf "dist/$HOSTNAME".apkovl.tar.gz

@@ -1,0 +1,23 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - '*'
+  pull_request:
+    branches:
+      - '*'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.1.1
+      - name: Cache APT Packages
+        uses: awalsh128/cache-apt-pkgs-action@v1.3.1
+        with:
+          packages: qemu-system qemu-utils tar xorriso curl
+      - name: Build
+        run: run/isogen
+      - name: Clean
+        run: run/clean

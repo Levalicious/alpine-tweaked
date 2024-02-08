@@ -1,0 +1,9 @@
+#!/bin/sh
+DIR=$(dirname "$0")
+FULLDIR=$(realpath "$DIR")
+cd "$FULLDIR"
+cd ..
+. ./.env
+
+rm -rf dist 
+run/start

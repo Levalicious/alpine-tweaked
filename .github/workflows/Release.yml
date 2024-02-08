@@ -1,0 +1,49 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - 'master'
+
+jobs:
+  release:
+    permissions: write-all
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.1.1
+      - uses: actions/setup-dotnet@v4
+      - name: Install GitVersion
+        uses: gittools/actions/gitversion/setup@v0.11
+        with:
+            versionSpec: 5.x
+      - name: Use GitVersion
+        id: gitversion
+        uses: gittools/actions/gitversion/execute@v0.11
+      - name: Cache APT Packages
+        uses: awalsh128/cache-apt-pkgs-action@v1.3.1
+        with:
+          packages: qemu-system qemu-utils tar xorriso curl
+      - name: Build
+        run: run/isogen
+      - name: Create Release
+        id: create-release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.gitversion.outputs.majorMinorPatch }}
+          release_name: Release v${{ steps.gitversion.outputs.majorMinorPatch }}
+          draft: false
+          prerelease: false
+      - name: Upload Release
+        id: upload-release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create-release.outputs.upload_url }} 
+          asset_path: dist/alpine-tweaked.iso
+          asset_name: alpine-tweaked-${{ steps.gitversion.outputs.majorMinorPatch }}-x86_64.iso
+          asset_content_type: application/x-iso9660-image
+      - name: Clean
+        run: run/clean

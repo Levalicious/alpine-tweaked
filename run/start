@@ -1,0 +1,19 @@
+#!/bin/sh
+DIR=$(dirname "$0")
+FULLDIR=$(realpath "$DIR")
+cd "$FULLDIR"
+cd ..
+. ./.env
+
+if [ ! -d "deps" ]; then
+    run/setup
+fi
+
+if [ ! -f "$CUSTPATH" ]; then
+    run/isogen
+fi
+
+mkdir qemu
+qemu-img create -f qcow2 qemu/$VDISK $SSD
+qemu-system-x86_64 -m $((RAM*1024)) -nic user -boot d -cdrom $CUSTPATH -hda qemu/$VDISK -display gtk
+rm -rf qemu

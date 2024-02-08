@@ -1,0 +1,57 @@
+#!/bin/sh
+DIR=$(dirname "$0")
+FULLDIR=$(realpath "$DIR")
+cd "$FULLDIR"
+cd ..
+. ./.env
+
+required_packages="qemu-system qemu-utils tar xorriso curl"
+
+# Update package list
+sudo apt update
+
+# Loop through each required package and check if it's installed
+for pkg in $required_packages; do
+    if ! dpkg-query -W -f='${Status}' $pkg 2>/dev/null | grep -q "ok installed"; then
+        echo "$pkg is not installed. Installing..."
+        sudo apt install -y "$pkg"
+    else
+        echo "$pkg is already installed."
+    fi
+done
+
+mkdir deps
+VERS=$(curl -s https://www.$DOWNLOAD/downloads/ | grep -oP '(?<=Current Alpine Version <strong>)[^<]*')
+KEY=$(curl -s https://www.$DOWNLOAD/downloads/ | grep -oP '(?<=GPG <a href=")[^"]*')
+SHORTVERS=$(echo "$VERS" | cut -d '.' -f 1,2)
+
+if [ ! -f "deps/alpine-virt-$VERS-x86_64.iso" ]; then
+    curl -o deps/alpine-virt-$VERS-x86_64.iso "https://dl-cdn.$DOWNLOAD/alpine/v$SHORTVERS/releases/x86_64/alpine-virt-$VERS-x86_64.iso"
+fi
+
+if [ ! -f "deps/alpine-virt-$VERS-x86_64.iso.sha256" ]; then
+    curl -o deps/alpine-virt-$VERS-x86_64.iso.sha256 "https://dl-cdn.$DOWNLOAD/alpine/v$SHORTVERS/releases/x86_64/alpine-virt-$VERS-x86_64.iso.sha256"
+fi
+
+if [ ! -f "deps/alpine-virt-$VERS-x86_64.iso.asc" ]; then
+    curl -o deps/alpine-virt-$VERS-x86_64.iso.asc "https://dl-cdn.$DOWNLOAD/alpine/v$SHORTVERS/releases/x86_64/alpine-virt-$VERS-x86_64.iso.asc"
+fi
+
+curl -o deps/pubkey.asc "https://www.$DOWNLOAD$KEY"
+
+cd deps/
+if ! sha256sum -c "alpine-virt-$VERS-x86_64.iso.sha256"; then
+    echo "Checksum verification failed!"
+    exit
+fi
+cd ..
+
+gpg --dearmor "./deps/pubkey.asc"
+gpg --dearmor "./deps/alpine-virt-$VERS-x86_64.iso.asc"
+gpg --dry-run --no-default-keyring --keyring ./deps/pubkey.asc.gpg --homedir ./ --verify ./deps/alpine-virt-$VERS-x86_64.iso.asc.gpg ./deps/alpine-virt-$VERS-x86_64.iso
+rm ./deps/alpine-virt-$VERS-x86_64.iso.asc.gpg ./deps/pubkey.asc.gpg
+rm trustdb.gpg
+
+echo "If the above message says 'Good Signature' and you trust the TLS certificate of $DOWNLOAD, ignore the trust warning."
+echo "If you don't know what that means, you don't trust the signature. Find another way to download the image you want."
+echo ""

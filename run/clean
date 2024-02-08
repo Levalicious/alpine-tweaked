@@ -1,0 +1,8 @@
+#!/bin/sh
+DIR=$(dirname "$0")
+FULLDIR=$(realpath "$DIR")
+cd "$FULLDIR"
+cd ..
+. ./.env
+
+rm -rf deps dist trustdb.gpg qemu
