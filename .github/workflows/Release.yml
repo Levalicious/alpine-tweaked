@@ -20,7 +20,7 @@ jobs:
         id: gitversion
         uses: gittools/actions/gitversion/execute@v0.11
       - name: Cache APT Packages
-        uses: awalsh128/cache-apt-pkgs-action@v1.3.1
+        uses: awalsh128/cache-apt-pkgs-action@v1.4.2
         with:
           packages: qemu-system qemu-utils tar xorriso curl
       - name: Build
